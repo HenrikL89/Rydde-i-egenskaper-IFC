@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h3>IFC Rensker (Beholder kun Pset 1, 2, 3, 7)</h3>
+    <input type="file" id="file-input" accept=".ifc">
+    <button onclick="processIFC()">Rensk og last ned</button>
+
+    <!-- Henter web-ifc fra CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/web-ifc@0.0.40/web-ifc-api.js"></script>
+
+    <script>
+        async function processIFC() {
+            const fileInput = document.getElementById('file-input');
+            if (!fileInput.files.length) return alert("Velg en fil!");
+
+            const file = fileInput.files[0];
+            const buffer = await file.arrayBuffer();
+            const data = new Uint8Array(buffer);
+
+            const ifcApi = new WebIFC.IfcAPI();
+            await ifcApi.Init();
+            const modelID = ifcApi.OpenModel(data);
+
+            // Logikk: Finn alle Psets, sjekk navn, fjern resten
+            // Merk: Dette krever dypere integrasjon med web-ifc sin 
+            // modell-struktur (GetLineIDsWithType, GetLine, etc.)
+            
+            console.log("Prosesserer fil...");
+            
+            // HER MÅ LOGIKKEN FOR FILTERING IMPLEMENTERES:
+            // 1. Gå gjennom IfcPropertySet
+            // 2. Sjekk Name-attributt
+            // 3. Hvis ikke starter med 1,2,3,7 -> ifcApi.RemoveLine(modelID, id)
+
+            alert("Denne prototypen krever at du definerer filter-logikken mot Web-IFC APIet. Se dokumentasjon.");
+            
+            // Export
+            const exportedData = ifcApi.ExportFileAsIFC(modelID);
+            const blob = new Blob([exportedData], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "renset_fil.ifc";
+            a.click();
+
+            ifcApi.CloseModel(modelID);
+        }
+    </script>
+</body>
+</html>
