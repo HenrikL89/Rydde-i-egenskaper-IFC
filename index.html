@@ -2,7 +2,6 @@
 <html lang="no">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IFC Property Cleaner | Norconsult</title>
     <style>
         :root { --nc-green: #007a5e; }
@@ -12,8 +11,7 @@
         #progress-container { width: 100%; background: #eee; height: 20px; border-radius: 10px; margin: 20px 0; display: none; overflow: hidden; }
         #progress-bar { width: 0%; height: 100%; background: var(--nc-green); transition: width 0.4s ease; }
         #status { margin-top: 15px; font-weight: 600; color: #555; font-size: 0.9em; }
-        button { padding: 12px 30px; background: var(--nc-green); color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: background 0.3s; }
-        button:hover { background: #005a46; }
+        button { padding: 12px 30px; background: var(--nc-green); color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; text-transform: uppercase; }
         button:disabled { background: #ccc; }
     </style>
 </head>
@@ -21,9 +19,9 @@
 
     <div class="box">
         <h2>IFC Property Cleaner</h2>
-        <p>Beholder kun egenskaper som starter med 0, 1, 2, 3, 4, 5, 6 eller 7.</p>
+        <p>Fjerner alt som IKKE starter med 0, 1, 2, 3, 4, 5, 6 eller 7.</p>
         <input type="file" id="file-input" accept=".ifc"><br><br>
-        <button id="run-btn" onclick="runProcess()">Rensk fil</button>
+        <button id="run-btn" onclick="runProcess()">Rensk fil og last ned</button>
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="status">Klar til å starte</div>
     </div>
@@ -53,27 +51,33 @@
                 
                 const modelID = ifcApi.OpenModel(new Uint8Array(buffer));
                 
-                // Typer som skal renses (PropertySets og Quantities)
-                const typesToClean = [855581566, 258838634]; 
+                // Vi henter alle Psets og Quantities
+                const psets = ifcApi.GetLineIDsWithType(modelID, 855581566);
+                const quantities = ifcApi.GetLineIDsWithType(modelID, 258838634);
+                
+                const allLines = [psets, quantities];
                 let removedCount = 0;
 
-                typesToClean.forEach(type => {
-                    const lines = ifcApi.GetLineIDsWithType(modelID, type);
+                allLines.forEach(lines => {
                     for (let i = 0; i < lines.size(); i++) {
                         const id = lines.get(i);
                         const props = ifcApi.GetLine(modelID, id);
-                        const name = props.Name ? props.Name.value : "";
+                        const name = props.Name ? props.Name.value : "UNNAMED";
+                        
+                        // LOGG ALLE NAVN TIL KONSOLLET (Sjekk dette i F12)
+                        console.log("Sjekker gruppe:", name);
 
-                        // Hvis navnet IKKE starter med 0-7, slett
+                        // Hvis navnet IKKE starter med 0-7, fjern det
                         if (!/^[0-7]/.test(name)) {
                             ifcApi.RemoveLine(modelID, id);
                             removedCount++;
+                            console.log("-> SLETTET:", name);
                         }
                     }
                 });
 
-                progressBar.style.width = "70%";
-                statusDiv.innerText = "Lagrer...";
+                progressBar.style.width = "80%";
+                statusDiv.innerText = "Lagrer fil...";
 
                 const exportedData = ifcApi.SaveModel(modelID);
                 const blob = new Blob([exportedData], { type: 'application/octet-stream' });
