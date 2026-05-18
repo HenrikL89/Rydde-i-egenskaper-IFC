@@ -5,24 +5,17 @@
     <title>IFC Property Cleaner | Norconsult</title>
     <style>
         :root { --nc-green: #007a5e; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(rgba(0, 122, 94, 0.8), rgba(0, 122, 94, 0.8)), url('https://www.pbctoday.co.uk/news/wp-content/uploads/2023/03/iStock-452589487-scaled.jpg'); background-size: cover; background-position: center; }
-        .box { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 100%; max-width: 500px; text-align: center; }
-        h2 { color: var(--nc-green); margin-top: 0; }
-        #progress-container { width: 100%; background: #eee; height: 20px; border-radius: 10px; margin: 20px 0; display: none; overflow: hidden; }
-        #progress-bar { width: 0%; height: 100%; background: var(--nc-green); transition: width 0.4s ease; }
-        #status { margin-top: 15px; font-weight: 600; color: #555; font-size: 0.9em; }
-        button { padding: 12px 30px; background: var(--nc-green); color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; text-transform: uppercase; }
-        button:disabled { background: #ccc; }
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(rgba(0,122,94,0.8), rgba(0,122,94,0.8)), url('https://www.pbctoday.co.uk/news/wp-content/uploads/2023/03/iStock-452589487-scaled.jpg'); background-size: cover; }
+        .box { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center; max-width: 500px; }
+        button { padding: 15px 30px; background: var(--nc-green); color: white; border: none; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
-
     <div class="box">
         <h2>IFC Property Cleaner</h2>
         <input type="file" id="file-input" accept=".ifc"><br><br>
         <button id="run-btn" onclick="runProcess()">Rensk og last ned</button>
-        <div id="progress-container"><div id="progress-bar"></div></div>
-        <div id="status">Klar til å starte</div>
+        <div id="status">Velg fil</div>
     </div>
 
     <script type="module">
@@ -30,44 +23,36 @@
         
         window.runProcess = async function() {
             const fileInput = document.getElementById('file-input');
-            if (!fileInput.files.length) return alert("Velg en IFC-fil.");
-
             const statusDiv = document.getElementById('status');
-            const runBtn = document.getElementById('run-btn');
-            runBtn.disabled = true;
-            statusDiv.innerText = "Analyserer alle data...";
-
             const file = fileInput.files[0];
             const buffer = await file.arrayBuffer();
             const ifcApi = new IfcAPI();
-            ifcApi.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/");
             await ifcApi.Init();
             
             const modelID = ifcApi.OpenModel(new Uint8Array(buffer));
             
-            // FÅ TAK I ALLE LINJER I HELE FILEN
-            const allLines = ifcApi.GetAllLines(modelID);
-            let removedCount = 0;
+            // 1. Finn alle Psets
+            const psets = ifcApi.GetLineIDsWithType(modelID, 855581566);
+            
+            // 2. Finn alle relasjoner som kobler Psets til objekter
+            const rels = ifcApi.GetLineIDsWithType(modelID, 1284759685);
 
-            for (let i = 0; i < allLines.size(); i++) {
-                const id = allLines.get(i);
-                const props = ifcApi.GetLine(modelID, id);
-
-                // Sjekker om linjen er en type som har et navn (Pset, TypeObject, etc)
-                if (props.Name) {
-                    const name = props.Name.value;
-                    
-                    // Hvis navnet eksisterer, men IKKE starter med 0-7, og det ikke er et "kritisk" IFC-element
-                    // Vi sjekker for Pset_ for å være sikre
-                    if (name.includes("Pset_") && !/^[0-7]/.test(name.replace("Pset_", ""))) {
-                        ifcApi.RemoveLine(modelID, id);
-                        removedCount++;
-                    }
-                    // For de som bare heter "Product" eller "Reference" uten Pset_ prefix
-                    else if (name === "Product" || name === "Reference Object" || name === "Calculated Geometry Values") {
-                        ifcApi.RemoveLine(modelID, id);
-                        removedCount++;
-                    }
+            for (let i = 0; i < rels.size(); i++) {
+                const relID = rels.get(i);
+                const rel = ifcApi.GetLine(modelID, relID);
+                
+                // Hent definisjonen (hvilket Pset er dette?)
+                const propDef = rel.RelatingPropertyDefinition;
+                const psetID = propDef.value;
+                const pset = ifcApi.GetLine(modelID, psetID);
+                
+                // Sjekk navn
+                const name = pset.Name ? pset.Name.value : "";
+                
+                // Hvis navnet IKKE starter med 0-7, slett BÅDE relasjonen og selve Psettet
+                if (!/^[0-7]/.test(name)) {
+                    ifcApi.RemoveLine(modelID, relID); // Slett koblingen
+                    ifcApi.RemoveLine(modelID, psetID); // Slett selve gruppen
                 }
             }
 
@@ -80,8 +65,7 @@
             a.click();
 
             ifcApi.CloseModel(modelID);
-            statusDiv.innerText = "Ferdig! Fjernet " + removedCount + " linjer.";
-            runBtn.disabled = false;
+            statusDiv.innerText = "Ferdig!";
         };
     </script>
 </body>
