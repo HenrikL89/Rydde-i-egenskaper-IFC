@@ -19,9 +19,8 @@
 
     <div class="box">
         <h2>IFC Property Cleaner</h2>
-        <p>Fjerner alt som IKKE starter med 0, 1, 2, 3, 4, 5, 6 eller 7.</p>
         <input type="file" id="file-input" accept=".ifc"><br><br>
-        <button id="run-btn" onclick="runProcess()">Rensk fil og last ned</button>
+        <button id="run-btn" onclick="runProcess()">Rensk og last ned</button>
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="status">Klar til å starte</div>
     </div>
@@ -34,68 +33,55 @@
             if (!fileInput.files.length) return alert("Velg en IFC-fil.");
 
             const statusDiv = document.getElementById('status');
-            const progressBar = document.getElementById('progress-bar');
             const runBtn = document.getElementById('run-btn');
-
             runBtn.disabled = true;
-            document.getElementById('progress-container').style.display = 'block';
-            statusDiv.innerText = "Behandler...";
-            progressBar.style.width = "20%";
+            statusDiv.innerText = "Analyserer alle data...";
 
-            try {
-                const file = fileInput.files[0];
-                const buffer = await file.arrayBuffer();
-                const ifcApi = new IfcAPI();
-                ifcApi.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/");
-                await ifcApi.Init();
-                
-                const modelID = ifcApi.OpenModel(new Uint8Array(buffer));
-                
-                // Vi henter alle Psets og Quantities
-                const psets = ifcApi.GetLineIDsWithType(modelID, 855581566);
-                const quantities = ifcApi.GetLineIDsWithType(modelID, 258838634);
-                
-                const allLines = [psets, quantities];
-                let removedCount = 0;
+            const file = fileInput.files[0];
+            const buffer = await file.arrayBuffer();
+            const ifcApi = new IfcAPI();
+            ifcApi.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/");
+            await ifcApi.Init();
+            
+            const modelID = ifcApi.OpenModel(new Uint8Array(buffer));
+            
+            // FÅ TAK I ALLE LINJER I HELE FILEN
+            const allLines = ifcApi.GetAllLines(modelID);
+            let removedCount = 0;
 
-                allLines.forEach(lines => {
-                    for (let i = 0; i < lines.size(); i++) {
-                        const id = lines.get(i);
-                        const props = ifcApi.GetLine(modelID, id);
-                        const name = props.Name ? props.Name.value : "UNNAMED";
-                        
-                        // LOGG ALLE NAVN TIL KONSOLLET (Sjekk dette i F12)
-                        console.log("Sjekker gruppe:", name);
+            for (let i = 0; i < allLines.size(); i++) {
+                const id = allLines.get(i);
+                const props = ifcApi.GetLine(modelID, id);
 
-                        // Hvis navnet IKKE starter med 0-7, fjern det
-                        if (!/^[0-7]/.test(name)) {
-                            ifcApi.RemoveLine(modelID, id);
-                            removedCount++;
-                            console.log("-> SLETTET:", name);
-                        }
+                // Sjekker om linjen er en type som har et navn (Pset, TypeObject, etc)
+                if (props.Name) {
+                    const name = props.Name.value;
+                    
+                    // Hvis navnet eksisterer, men IKKE starter med 0-7, og det ikke er et "kritisk" IFC-element
+                    // Vi sjekker for Pset_ for å være sikre
+                    if (name.includes("Pset_") && !/^[0-7]/.test(name.replace("Pset_", ""))) {
+                        ifcApi.RemoveLine(modelID, id);
+                        removedCount++;
                     }
-                });
-
-                progressBar.style.width = "80%";
-                statusDiv.innerText = "Lagrer fil...";
-
-                const exportedData = ifcApi.SaveModel(modelID);
-                const blob = new Blob([exportedData], { type: 'application/octet-stream' });
-                
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = "Renset_" + file.name;
-                a.click();
-
-                ifcApi.CloseModel(modelID);
-                statusDiv.innerText = "Ferdig! Fjernet " + removedCount + " grupper.";
-                progressBar.style.width = "100%";
-            } catch (err) {
-                statusDiv.innerText = "Feil: " + err.message;
-                console.error(err);
-            } finally {
-                runBtn.disabled = false;
+                    // For de som bare heter "Product" eller "Reference" uten Pset_ prefix
+                    else if (name === "Product" || name === "Reference Object" || name === "Calculated Geometry Values") {
+                        ifcApi.RemoveLine(modelID, id);
+                        removedCount++;
+                    }
+                }
             }
+
+            statusDiv.innerText = "Lagrer...";
+            const exportedData = ifcApi.SaveModel(modelID);
+            const blob = new Blob([exportedData], { type: 'application/octet-stream' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = "Renset_" + file.name;
+            a.click();
+
+            ifcApi.CloseModel(modelID);
+            statusDiv.innerText = "Ferdig! Fjernet " + removedCount + " linjer.";
+            runBtn.disabled = false;
         };
     </script>
 </body>
