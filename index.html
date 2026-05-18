@@ -19,8 +19,7 @@
 
     <div class="box">
         <h2>IFC Property Cleaner</h2>
-        <p>Velg en IFC-fil for å fjerne uønskede egenskapsgrupper.</p>
-        <p><small>Beholder kun grupper som starter med 0, 1, 3 eller 7.</small></p>
+        <p>Fjerner egenskaper som ikke starter med 0, 1, 3 eller 7.</p>
         
         <input type="file" id="file-input" accept=".ifc"><br><br>
         <button id="run-btn" onclick="runProcess()">Rensk og last ned</button>
@@ -30,7 +29,8 @@
     </div>
 
     <script type="module">
-        import { IfcAPI } from 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.40/web-ifc-api.js';
+        // Oppgradert til versjon 0.0.44 for bedre minnehåndtering
+        import { IfcAPI } from 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/web-ifc-api.js';
         
         window.runProcess = async function() {
             const fileInput = document.getElementById('file-input');
@@ -51,15 +51,15 @@
             const data = new Uint8Array(buffer);
 
             const ifcApi = new IfcAPI();
-            ifcApi.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.40/");
+            ifcApi.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/");
             await ifcApi.Init();
             
             const modelID = ifcApi.OpenModel(data);
             
-            statusDiv.innerText = "Behandler egenskaper (Psets)...";
+            statusDiv.innerText = "Behandler egenskaper...";
             progressBar.style.width = "40%";
 
-            // 855581566 er ID-en for IfcPropertySet i web-ifc
+            // 855581566 = IfcPropertySet
             const psets = ifcApi.GetLineIDsWithType(modelID, 855581566);
             const size = psets.size();
             let removed = 0;
@@ -69,17 +69,18 @@
                 const props = ifcApi.GetLine(modelID, id);
                 const name = props.Name ? props.Name.value : "";
 
-                // Regex: Beholder bare hvis navnet starter med 0, 1, 3 eller 7
+                // Beholder kun hvis navnet starter med 0, 1, 3 eller 7
                 if (!/^[0137]/.test(name)) {
                     ifcApi.RemoveLine(modelID, id);
                     removed++;
                 }
             }
 
-            statusDiv.innerText = "Eksporterer fil...";
+            statusDiv.innerText = "Lagrer ny fil...";
             progressBar.style.width = "80%";
 
-            const exportedData = ifcApi.ExportFileAsIFC(modelID);
+            // Bruker SaveModel() som er den korrekte metoden
+            const exportedData = ifcApi.SaveModel(modelID);
             const blob = new Blob([exportedData], { type: 'application/octet-stream' });
             
             const a = document.createElement('a');
