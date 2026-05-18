@@ -3,33 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IFC Property Cleaner</title>
+    <title>IFC Property Cleaner | Norconsult</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background-color: #f4f7f6; }
-        .box { border: 2px solid #ddd; padding: 40px; border-radius: 15px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        #progress-container { width: 100%; background: #eee; height: 25px; border-radius: 12px; margin: 20px 0; display: none; overflow: hidden; }
-        #progress-bar { width: 0%; height: 100%; background: #28a745; transition: width 0.4s ease; }
-        #status { margin-top: 10px; font-weight: bold; color: #333; }
-        button { padding: 12px 25px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #0056b3; }
+        :root {
+            --nc-green: #007a5e; /* Norconsult-grønn */
+            --nc-dark: #2c3e50;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            background: linear-gradient(rgba(0, 122, 94, 0.8), rgba(0, 122, 94, 0.8)), 
+                        url('https://www.pbctoday.co.uk/news/wp-content/uploads/2023/03/iStock-452589487-scaled.jpg');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .box { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 8px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
+            width: 100%; 
+            max-width: 500px; 
+            text-align: center;
+        }
+
+        h2 { color: var(--nc-green); margin-top: 0; }
+        
+        #progress-container { width: 100%; background: #eee; height: 20px; border-radius: 10px; margin: 20px 0; display: none; overflow: hidden; }
+        #progress-bar { width: 0%; height: 100%; background: var(--nc-green); transition: width 0.4s ease; }
+        
+        #status { margin-top: 15px; font-weight: 600; color: #555; font-size: 0.9em; }
+        
+        button { 
+            padding: 12px 30px; 
+            background: var(--nc-green); 
+            color: white; 
+            border: none; 
+            border-radius: 3px; 
+            cursor: pointer; 
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: background 0.3s;
+        }
+        button:hover { background: #005a46; }
         button:disabled { background: #ccc; }
+        
+        input::file-selector-button {
+            padding: 8px 15px;
+            background: #f4f4f4;
+            border: 1px solid #ddd;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
     <div class="box">
         <h2>IFC Property Cleaner</h2>
-        <p>Fjerner egenskaper som ikke starter med 0, 1, 3 eller 7.</p>
+        <p>Filtrer egenskaper: Beholder kun 0, 1, 3 og 7.</p>
         
         <input type="file" id="file-input" accept=".ifc"><br><br>
-        <button id="run-btn" onclick="runProcess()">Rensk og last ned</button>
+        <button id="run-btn" onclick="runProcess()">Rensk fil</button>
         
         <div id="progress-container"><div id="progress-bar"></div></div>
         <div id="status">Klar til å starte</div>
     </div>
 
     <script type="module">
-        // Oppgradert til versjon 0.0.44 for bedre minnehåndtering
         import { IfcAPI } from 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/web-ifc-api.js';
         
         window.runProcess = async function() {
@@ -43,55 +90,57 @@
 
             runBtn.disabled = true;
             progressContainer.style.display = 'block';
-            statusDiv.innerText = "Laster inn IFC-modell...";
+            statusDiv.innerText = "Laster inn modell...";
             progressBar.style.width = "10%";
 
-            const file = fileInput.files[0];
-            const buffer = await file.arrayBuffer();
-            const data = new Uint8Array(buffer);
+            try {
+                const file = fileInput.files[0];
+                const buffer = await file.arrayBuffer();
+                const data = new Uint8Array(buffer);
 
-            const ifcApi = new IfcAPI();
-            ifcApi.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/");
-            await ifcApi.Init();
-            
-            const modelID = ifcApi.OpenModel(data);
-            
-            statusDiv.innerText = "Behandler egenskaper...";
-            progressBar.style.width = "40%";
+                const ifcApi = new IfcAPI();
+                ifcApi.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.44/");
+                await ifcApi.Init();
+                
+                const modelID = ifcApi.OpenModel(data);
+                statusDiv.innerText = "Behandler egenskaper...";
+                progressBar.style.width = "40%";
 
-            // 855581566 = IfcPropertySet
-            const psets = ifcApi.GetLineIDsWithType(modelID, 855581566);
-            const size = psets.size();
-            let removed = 0;
+                const psets = ifcApi.GetLineIDsWithType(modelID, 855581566);
+                const size = psets.size();
+                let removed = 0;
 
-            for (let i = 0; i < size; i++) {
-                const id = psets.get(i);
-                const props = ifcApi.GetLine(modelID, id);
-                const name = props.Name ? props.Name.value : "";
+                for (let i = 0; i < size; i++) {
+                    const id = psets.get(i);
+                    const props = ifcApi.GetLine(modelID, id);
+                    const name = props.Name ? props.Name.value : "";
 
-                // Beholder kun hvis navnet starter med 0, 1, 3 eller 7
-                if (!/^[0137]/.test(name)) {
-                    ifcApi.RemoveLine(modelID, id);
-                    removed++;
+                    if (!/^[0137]/.test(name)) {
+                        ifcApi.RemoveLine(modelID, id);
+                        removed++;
+                    }
+                    if (i % 500 === 0) progressBar.style.width = 40 + (i/size)*40 + "%";
                 }
+
+                statusDiv.innerText = "Lagrer fil...";
+                progressBar.style.width = "90%";
+
+                const exportedData = ifcApi.SaveModel(modelID);
+                const blob = new Blob([exportedData], { type: 'application/octet-stream' });
+                
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = "Renset_" + file.name;
+                a.click();
+
+                ifcApi.CloseModel(modelID);
+                statusDiv.innerText = "Ferdig! Fjernet " + removed + " grupper.";
+                progressBar.style.width = "100%";
+            } catch (err) {
+                statusDiv.innerText = "Feil: " + err.message;
+            } finally {
+                runBtn.disabled = false;
             }
-
-            statusDiv.innerText = "Lagrer ny fil...";
-            progressBar.style.width = "80%";
-
-            // Bruker SaveModel() som er den korrekte metoden
-            const exportedData = ifcApi.SaveModel(modelID);
-            const blob = new Blob([exportedData], { type: 'application/octet-stream' });
-            
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = "renset_" + file.name;
-            a.click();
-
-            ifcApi.CloseModel(modelID);
-            statusDiv.innerText = "Ferdig! Fjernet " + removed + " grupper.";
-            progressBar.style.width = "100%";
-            runBtn.disabled = false;
         };
     </script>
 </body>
