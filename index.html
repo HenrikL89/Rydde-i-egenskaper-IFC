@@ -10,87 +10,78 @@
         #progress-bar { width: 0%; height: 100%; background: #4caf50; border-radius: 10px; transition: width 0.3s; }
         #status { margin-top: 10px; color: #555; }
         button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        button:disabled { background: #ccc; }
     </style>
 </head>
 <body>
 
     <div class="box">
         <h2>IFC Property Cleaner</h2>
-        <p>Fjerner egenskapsgrupper som ikke starter med 1, 2, 3 eller 7.</p>
         <input type="file" id="file-input" accept=".ifc"><br><br>
-        <button id="run-btn" onclick="processIFC()">Rensk og last ned</button>
-        
+        <button id="run-btn" onclick="runProcess()">Rensk og last ned</button>
         <div id="progress-container"><div id="progress-bar"></div></div>
-        <div id="status">Klar til start...</div>
+        <div id="status">Velg en fil for å starte</div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/web-ifc@0.0.40/web-ifc-api.js"></script>
-
-    <script>
-        const statusDiv = document.getElementById('status');
-        const progressBar = document.getElementById('progress-bar');
-        const progressContainer = document.getElementById('progress-container');
-        const runBtn = document.getElementById('run-btn');
-
-        function updateStatus(text, percent) {
-            statusDiv.innerText = text;
-            if (percent !== undefined) {
-                progressContainer.style.display = 'block';
-                progressBar.style.width = percent + '%';
-            }
-        }
-
-        async function processIFC() {
+    <!-- Vi importerer biblioteket som en modul -->
+    <script type="module">
+        import { IfcAPI } from 'https://cdn.jsdelivr.net/npm/web-ifc@0.0.40/web-ifc-api.js';
+        
+        window.runProcess = async function() {
             const fileInput = document.getElementById('file-input');
             if (!fileInput.files.length) return alert("Velg en fil først!");
 
-            runBtn.disabled = true;
-            updateStatus("Laster inn IFC-fil...", 10);
+            const statusDiv = document.getElementById('status');
+            const progressBar = document.getElementById('progress-bar');
+            const progressContainer = document.getElementById('progress-container');
+            
+            progressContainer.style.display = 'block';
+            statusDiv.innerText = "Laster inn IFC...";
+            progressBar.style.width = "10%";
 
             const file = fileInput.files[0];
             const buffer = await file.arrayBuffer();
             const data = new Uint8Array(buffer);
 
-            const ifcApi = new WebIFC.IfcAPI();
+            const ifcApi = new IfcAPI();
+            // Sett stien til WASM-filen eksplisitt
             ifcApi.SetWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.40/");
             await ifcApi.Init();
+            
             const modelID = ifcApi.OpenModel(data);
+            
+            statusDiv.innerText = "Rensker egenskaper...";
+            progressBar.style.width = "40%";
 
-            updateStatus("Analyserer egenskapsgrupper...", 30);
+            // Finn alle Psets
+            const psets = ifcApi.GetLineIDsWithType(modelID, 855581566); // 855581566 er IFCPROPERTYSET sin ID
+            const size = psets.size();
 
-            const psets = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCPROPERTYSET);
-            const psetsIds = psets.size();
-            let removedCount = 0;
-
-            for (let i = 0; i < psetsIds; i++) {
+            for (let i = 0; i < size; i++) {
                 const id = psets.get(i);
                 const props = ifcApi.GetLine(modelID, id);
                 const name = props.Name ? props.Name.value : "";
 
+                // Regex for 1, 2, 3 eller 7
                 if (!/^[1237]/.test(name)) {
                     ifcApi.RemoveLine(modelID, id);
-                    removedCount++;
                 }
-                
-                if (i % 100 === 0) updateStatus(`Behandler Psets... (${i}/${psetsIds})`, 30 + (i/psetsIds)*50);
             }
 
-            updateStatus("Eksporterer ny fil...", 90);
+            statusDiv.innerText = "Eksporterer...";
+            progressBar.style.width = "80%";
 
             const exportedData = ifcApi.ExportFileAsIFC(modelID);
             const blob = new Blob([exportedData], { type: 'application/octet-stream' });
-            const url = URL.createObjectURL(blob);
             
             const a = document.createElement('a');
-            a.href = url;
+            a.href = URL.createObjectURL(blob);
             a.download = "renset_" + file.name;
             a.click();
 
             ifcApi.CloseModel(modelID);
-            updateStatus(`Ferdig! ${removedCount} grupper fjernet.`, 100);
-            runBtn.disabled = false;
-        }
+            statusDiv.innerText = "Ferdig!";
+            progressBar.style.width = "100%";
+        };
     </script>
 </body>
 </html>
